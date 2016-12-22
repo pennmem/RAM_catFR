@@ -1,0 +1,13 @@
+In this part of the experiment we would like to know what words you recognize from today's session.
+
+You will see a list of words presented on the screen.  For each word, please indicate as quickly and as accurately as possible whether you remember seeing that word on ANY of the lists of words that you studied today.  
+
+Press the / key if you REMEMBER seeing the word.
+
+Press the Z key if you DO NOT REMEMBER seeing the word.
+
+<<<PRESS ENTER TO BEGIN>>>
+
+
+
+
