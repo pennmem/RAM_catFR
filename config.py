@@ -4,14 +4,20 @@
 # AND SPANISH ('SP')
 LANGUAGE='EN'
 
-# VERSION NUMBER (printed in session.log)
-VERSION_NUM='2.04'
+EXPERIMENT_NAME = 'FR1'
+VERSION_NUM = '3.00'
 
 # REQUIRE SYNCBOX
 require_labjack = True
 
+# Overridden in sconfig files
+do_stim = False
+
 wp = 'text_%s/CatFR_WORDS.txt'%LANGUAGE
 noAcc_wp = 'CatFR_WORDS_noAcc.txt'
+
+# Control PC
+control_pc = True
 
 # Number of sessions
 numSessions = 10

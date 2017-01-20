@@ -54,6 +54,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from extendedPyepl import *
+from pyepl import timing
 
 from pyepl.locals import *
 
@@ -68,8 +69,9 @@ import playIntro
 import copy
 from collections import defaultdict
 from RAMControl import RAMControl
-from RAMControl import RAMCallbacks
+from messages import WordMessage
 
+ram_control = RAMControl.instance()
 
 # Set the current version
 # TODO: Update the version for System 2.0 pyepl changes
@@ -123,7 +125,7 @@ class CatFRExperiment:
         self.exp, self.config = \
             exp, config
         self.subject = exp.getOptions().get('subject')
-        self.experiment_name = config.sys2['EXPERIMENT_NAME']
+        self.experiment_name = config.experiment
         self.video = video
         self.clock = clock
         self.wp = CustomTextPool(self.config.wp)
@@ -236,7 +238,7 @@ then delete the subject folder in:
         :param session_source_file: the filename to be read
         :return: 2D array of words
         """
-        session_lists = [x.strip().split() for x in open(session_source_file).readlines()]
+        session_lists = [x.strip().split() for x in codecs.open(session_source_file).readlines()]
 
         # Check to make sure they're all the right length
         assert all([len(this_list) == self.config.listLen for this_list in session_lists])
@@ -248,7 +250,7 @@ then delete the subject folder in:
         """
         :return: Whether or not this is a stim session
         """
-        stim_type = self.config.sys2['STIM_TYPE']
+        stim_type = self.config.stim_type
         if stim_type == 'CLOSED_STIM':
             return True
         elif stim_type == 'NO_STIM':
@@ -612,8 +614,8 @@ then delete the subject folder in:
                            language='spanish' if self.config.LANGUAGE == 'SP' else 'english',
                            LANG=self.config.LANGUAGE)
 
-        self._show_making_stim_forms()
-        self.make_stim_forms()
+        #self._show_making_stim_forms()
+        #self.make_stim_forms()
 
         self.exp.setSession(0)
         return self.exp.restoreState()
@@ -623,16 +625,16 @@ then delete the subject folder in:
         Gets the type of stimulation for the given session
         :return: type of stimulation
         """
-        return 'NO_RECORD' if self.config.sys2['EXPERIMENT_NAME'] == 'FR0' else\
-               'NO_STIM' if self.config.sys2['EXPERIMENT_NAME'] == 'FR1' else\
-               'OPEN_STIM' if self.config.sys2['EXPERIMENT_NAME'] == 'FR2' else\
-               'CLOSED_STIM' if self.config.sys2['EXPERIMENT_NAME'] == 'FR3' else\
+        return 'NO_RECORD' if self.config.experiment == 'FR0' else\
+               'NO_STIM' if self.config.experiment == 'FR1' else\
+               'OPEN_STIM' if self.config.experiment == 'FR2' else\
+               'CLOSED_STIM' if self.config.experiment == 'FR3' else\
                'UNKNOWN'
 
 
 class CatFRExperimentRunner:
 
-    def __init__(self, catfr_experiment, clock, log, mathlog, video, audio, callbacks):
+    def __init__(self, catfr_experiment, clock, log, mathlog, video, audio):
         self.catfr_experiment = catfr_experiment
         self.config = catfr_experiment.config
         self.clock = clock
@@ -640,7 +642,6 @@ class CatFRExperimentRunner:
         self.mathlog = mathlog
         self.video = video
         self.audio = audio
-        self.callbacks = callbacks
         self.start_beep = CustomBeep(self.config.startBeepFreq,
                                      self.config.startBeepDur,
                                      self.config.startBeepRiseFall)
@@ -679,7 +680,7 @@ class CatFRExperimentRunner:
             return self.choose_yes_or_no(
                 'Practice list already ran.\nPress Y to run again\nPress N to skip'
             )
-        elif self.config.sys2['EXPERIMENT_NAME'] == 'FR1':
+        elif self.config.experiment == 'FR1':
             return self.choose_yes_or_no(
                 'Would you like to run the practice list?\nPress Y to continue\nPress N to skip to first list'
             )
@@ -694,39 +695,36 @@ class CatFRExperimentRunner:
             'Running %s in session %d of %s\n(%s).\n Press Y to continue, N to quit' %
             (subj,
              state.sessionNum + 1,
-             self.config.sys2['EXPERIMENT_NAME'],
+             self.config.experiment,
              state.language))
 
-    def _send_state_message(self, state, value):
+    def _send_state_message(self, state, value, meta=None):
         """
         Sends message with STATE information to control pc
         :param state: 'PRACTICE', 'ENCODING', 'WORD'...
         :param value: True/False
         """
-        if state not in self.config.sys2['state_list']:
+        if state not in self.config.state_list:
             raise Exception('Improper state %s not in list of states' % state)
-        self._send_event('STATE', {'name': state, 'value': value})
+        self._send_event('STATE', state=state, value=value, meta=meta)
 
     def _send_trial_message(self, trial_num):
         """
         Sends message with TRIAL information to control pc
         :param trial_num: 1, 2, ...
         """
-        self._send_event('TRIAL', trial_num)
+        self._send_event('TRIAL', trial=trial_num)
     
-    def _send_sync_np(self, n_syncs=1, delay=0, jitter=0):
-        for _ in range(n_syncs):
-            self._send_event('SYNCNP')
-            self.clock.delay(delay, jitter)
-            self.clock.wait()
-
-    def _send_event(self, *args):
+    def _send_event(self, type, *args, **kwargs):
         """
         Sends an arbitrary event
         :param args: Inputs to RAMControl.sendEvent()
         """
-        if self.config.sys2['control_pc']:
-            RAMControl.getInstance().sendEvent(RAMControl.getSystemTimeInMillis(), *args)
+        if 'timestamp' not in kwargs:
+            kwargs['timestamp'] = timing.now()
+
+        if self.config.control_pc:
+            ram_control.send(ram_control.build_message(type, *args, **kwargs))
 
     def _show_message_from_file(self, filename):
         """
@@ -837,6 +835,7 @@ class CatFRExperimentRunner:
         self._resynchronize(False)
 
         # Countdown to start...
+
         self._countdown()
 
         # Display the "cross-hairs" and log
@@ -982,6 +981,7 @@ class CatFRExperimentRunner:
                                                                     duration=self.config.wordDuration,
                                                                     updateCallback=self._on_word_update)
         # Log that we showed the word
+        ram_control.send(WordMessage(word))
         if not is_practice:
             self.log_message(u'WORD\t%s\t%s\t%d\t%s\t%d\t%s' %
                              ('text',
@@ -1013,7 +1013,8 @@ class CatFRExperimentRunner:
                            maxProbs=self.config.MATH_maxProbs,
                            plusAndMinus=self.config.MATH_plusAndMinus,
                            minDuration=self.config.MATH_minDuration,
-                           textSize=self.config.MATH_textSize)
+                           textSize=self.config.MATH_textSize,
+                           callback=ram_control.send_math_message)
 
         self._send_state_message('DISTRACT', False)
         self.clock.tare()
@@ -1040,21 +1041,23 @@ class CatFRExperimentRunner:
                 state.session_started = False
                 self.catfr_experiment.exp.saveState(state)
                 waitForAnyKey(self.clock, Text('Session skipped\nRestart RAM_%s to run next session' %
-                                               self.config.sys2['EXPERIMENT_NAME']))
+                                               self.config.experiment))
                 return True
         return False
+
+    def resync_callback(self):
+        flashStimulus(Text("Syncing..."), 500)
 
     def _resynchronize(self, show_syncing=True):
         """
         Performs a resynchronization (christian's algorithm)
         (to be run before each list)
         """
-        if self.config.sys2['control_pc']:
-            control = RAMControl.getInstance()
+        if self.config.control_pc:
             if show_syncing:
-                control.alignClocks(self.callbacks.resync_callback, self.clock)
+                ram_control.align_clocks(callback=self.resync_callback)
             else:
-                control.alignClocks(lambda *_: None, self.clock)
+                ram_control.align_clocks()
 
     def _run_all_lists(self, state):
         """
@@ -1068,8 +1071,6 @@ class CatFRExperimentRunner:
             this_list = lists[state.trialNum]
             this_list_cats = cats[state.trialNum]
             is_stim = is_stims[state.trialNum]
-            # Sync with NP 10 more times over 2.5 secs
-            self._send_sync_np(5, 500, 100)
             self._run_list([word.name for word in this_list], this_list_cats, state, is_stim)
             state.trialNum += 1
             self.catfr_experiment.exp.saveState(state)
@@ -1105,9 +1106,6 @@ class CatFRExperimentRunner:
         # Clear the screen
         self.video.clear('black')
 
-        # Sync to the neuroport 20 times over (approximately) 10 seconds
-        self._send_sync_np(20, 500, 100)
-
         if not self._check_sess_num(state):
             exit(1)
 
@@ -1122,10 +1120,7 @@ class CatFRExperimentRunner:
 
         # Reset the list number on the control PC to 0
         self._send_trial_message(-1)
-        self._send_event('SESSION', {'session_number': state.sessionNum + 1, 'session_type': stim_type})
-        
-        # Make sure we get an early NP synchronization
-        self._send_sync_np()
+        self._send_event('SESSION', session=state.sessionNum + 1, session_type=stim_type)
 
         self._send_state_message('MIC TEST', True)
         self.log_message('MIC_TEST')
@@ -1133,14 +1128,14 @@ class CatFRExperimentRunner:
             return
         self._send_state_message('MIC TEST', False)
         
-        # And a second NP sync so we can align
-        self._send_sync_np()
-
         if state.trialNum == 0:
             self._resynchronize(False)
             self._run_practice_list(state)
             self._resynchronize(True)
             state = self.catfr_experiment.exp.restoreState()
+        
+        self.catfr_experiment.exp.saveState(state, session_started=True)
+        state = self.fr_experiment.exp.restoreState()
 
         self._run_all_lists(state)
 
@@ -1169,9 +1164,6 @@ def cleanupRAMControl():
         Cleanup anything related to the Control PC
         Close connections, terminate threads.
         """
-        control = RAMControl.getInstance()
-        control.stopHeartbeatPoll()
-        control.disconnect()
 
 
 def exit(num):
@@ -1184,25 +1176,25 @@ def exit(num):
         sys.exit(num)
 
 
-def connect_to_control_pc(exp, config, state, video, callbacks):
+def connect_to_control_pc(subject, session, config):
     """
     establish connection to control PC
     """
-    if not config['control_pc']:
+    if not config.control_pc:
         return
-    clock = PresentationClock()
-    control = RAMControl.getInstance()
+    video = VideoTrack.lastInstance()
     video.clear('black')
-    if control.readyControlPC(clock,
-                              callbacks,
-                              config,
-                              exp.getOptions().get('subject'),
-                              state.sessionNum):
+
+    ram_control.configure(config.experiment, config.version, session, config.stim_type, subject, config.state_list)
+    clock = PresentationClock()
+    if not ram_control.initiate_connection():
         waitForAnyKey(clock,
                       Text("CANNOT SYNC TO CONTROL PC\nCheck connections and restart the experiment",
                            size=.05))
         exit(1)
-    exp.saveState(state, session_started=True)
+
+    cb = lambda: flashStimulus(Text("Waiting for start from control PC..."))
+    ram_control.wait_for_start_message(poll_callback=cb)
 
 
 def run():
@@ -1218,6 +1210,8 @@ def run():
 
     # Users can quit with escape-F1
     exp.setBreak()
+    RAMControl.instance().register_handler("EXIT", exit)
+    RAMControl.instance().socket.log_path = exp.session.fullPath()
 
     # Get config
     config = exp.getConfig()
@@ -1229,13 +1223,12 @@ def run():
 
     # Have to set session before creating tracks
     exp.setSession(sessionNum)
+    subject = exp.getOptions().get('subject')
 
     # Set up tracks
     video = VideoTrack('video')
     clock = PresentationClock()
 
-    # Set up sys2 callbacks
-    callbacks = RAMCallbacks(config, clock, video)
 
     catfr_experiment = CatFRExperiment(exp, config, video, clock)
 
@@ -1243,8 +1236,6 @@ def run():
         state = catfr_experiment.init_experiment()
     else:
         state = exp.restoreState()
-
-    exp.setSession(state.sessionNum)
 
     log = LogTrack('session')
     mathlog = LogTrack('math')
@@ -1257,12 +1248,12 @@ def run():
                                               mathlog,
                                               video,
                                               audio,
-                                              callbacks)
+                                              )
 
     if experiment_runner.should_skip_session(state):
         return
 
-    connect_to_control_pc(exp, config.sys2, state, video, callbacks)
+    connect_to_control_pc(subject, sessionNum, config)
 
     experiment_runner.run_session(keyboard)
 
