@@ -635,7 +635,7 @@ then delete the subject folder in:
 class CatFRExperimentRunner:
 
     def __init__(self, catfr_experiment, clock, log, mathlog, video, audio):
-        self.catfr_experiment = catfr_experiment
+        self.experiment = catfr_experiment
         self.config = catfr_experiment.config
         self.clock = clock
         self.log = log
@@ -690,7 +690,7 @@ class CatFRExperimentRunner:
         Prompts the user to check the session number
         :return: True if verified, False otherwise
         """
-        subj = self.catfr_experiment.subject
+        subj = self.experiment.subject
         return self.choose_yes_or_no(
             'Running %s in session %d of %s\n(%s).\n Press Y to continue, N to quit' %
             (subj,
@@ -752,7 +752,7 @@ class CatFRExperimentRunner:
 
         # Log in state that list has been run
         state.practiceDone = True
-        self.catfr_experiment.exp.saveState(state)
+        self.experiment.exp.saveState(state)
 
         # Show a message afterwards
         self._show_message_from_file(self.config.post_practiceList % state.LANG)
@@ -945,7 +945,7 @@ class CatFRExperimentRunner:
         self._send_state_message('CAT_%d' % cat_num, value)
 
     def _get_category_name(self, category_num):
-        state = self.catfr_experiment.exp.restoreState()
+        state = self.experiment.exp.restoreState()
         return state.categories[category_num]
 
     def _on_word_update(self, *args):
@@ -1025,7 +1025,7 @@ class CatFRExperimentRunner:
         Check if session should be skipped
         :return: True if session is skipped, False otherwise
         """
-        if self.catfr_experiment.is_session_started():
+        if self.experiment.is_session_started():
             bc = ButtonChooser(Key('SPACE') & Key('RETURN'), Key('ESCAPE'))
             self.video.clear('black')
             (_, button, timestamp) = Text(
@@ -1039,7 +1039,7 @@ class CatFRExperimentRunner:
                 state.trialNum = 0
                 state.practiceDone = False
                 state.session_started = False
-                self.catfr_experiment.exp.saveState(state)
+                self.experiment.exp.saveState(state)
                 waitForAnyKey(self.clock, Text('Session skipped\nRestart RAM_%s to run next session' %
                                                self.config.experiment))
                 return True
@@ -1073,7 +1073,7 @@ class CatFRExperimentRunner:
             is_stim = is_stims[state.trialNum]
             self._run_list([word.name for word in this_list], this_list_cats, state, is_stim)
             state.trialNum += 1
-            self.catfr_experiment.exp.saveState(state)
+            self.experiment.exp.saveState(state)
             self._resynchronize(True)
 
     def run_session(self, keyboard):
@@ -1084,7 +1084,7 @@ class CatFRExperimentRunner:
 
         self._send_state_message('INSTRUCT', True)
         self.log_message('INSTRUCT_VIDEO\tON')
-        playIntro.playIntro(self.catfr_experiment.exp, self.video, keyboard, True, config.LANGUAGE)
+        playIntro.playIntro(self.experiment.exp, self.video, keyboard, True, config.LANGUAGE)
         self._send_state_message('INSTRUCT', False)
         self.log_message('INSTRUCT_VIDEO\tOFF')
 
@@ -1094,14 +1094,14 @@ class CatFRExperimentRunner:
             setRealtime(config.rtPeriod, config.rtComputation, config.rtConstraint)
 
         # Get the state object
-        state = self.catfr_experiment.exp.restoreState()
+        state = self.experiment.exp.restoreState()
 
         # Return if out of sessions
         if self.is_out_of_sessions(state):
             return
 
         # Set the session appropriately for recording files
-        self.catfr_experiment.exp.setSession(state.sessionNum)
+        self.experiment.exp.setSession(state.sessionNum)
 
         # Clear the screen
         self.video.clear('black')
@@ -1111,7 +1111,7 @@ class CatFRExperimentRunner:
 
         self.video.clear('black')
 
-        stim_type = self.catfr_experiment.get_stim_type()
+        stim_type = self.experiment.get_stim_type()
         stim_session_type = '%s_SESSION' % stim_type
         self.log_message('SESS_START\t%s\t%s\tv_%s' % (
                          state.sessionNum + 1,
@@ -1132,18 +1132,18 @@ class CatFRExperimentRunner:
             self._resynchronize(False)
             self._run_practice_list(state)
             self._resynchronize(True)
-            state = self.catfr_experiment.exp.restoreState()
+            state = self.experiment.exp.restoreState()
         
-        self.catfr_experiment.exp.saveState(state, session_started=True)
-        state = self.fr_experiment.exp.restoreState()
+        self.experiment.exp.saveState(state, session_started=True)
+        state = self.experiment.exp.restoreState()
 
         self._run_all_lists(state)
 
-        self.catfr_experiment.exp.saveState(state,
-                                            trialNum=0,
-                                            session_started=False,
-                                            sessionNum=state.sessionNum+1,
-                                            practiceDone=False)
+        self.experiment.exp.saveState(state,
+                                      trialNum=0,
+                                      session_started=False,
+                                      sessionNum=state.sessionNum+1,
+                                      practiceDone=False)
 
         timestamp = waitForAnyKey(self.clock, Text('Thank you!\nYou have completed the session.'))
         self.log_message('SESS_END', timestamp)
