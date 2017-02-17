@@ -4,7 +4,7 @@
 # ALL SYSTEM2.0 CONFIGURATION OPTIONS
 experiment = 'catFR3'
 stim_type = 'CLOSED_STIM'
-version = '3.0'
+version = '3.0.0'
 control_pc = True
 heartbeat_interval = 1000
 category_states = ['CAT_%d' % i for i in range(25)]
